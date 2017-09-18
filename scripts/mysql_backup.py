@@ -6,7 +6,6 @@ import os
 from datetime import datetime
 
 LOG = logging.getLogger(__name__)
-SSH_USER = "centos"
 
 
 def backup_database(ssh, database, backup_dir):
@@ -51,7 +50,7 @@ def compress_db_backup(ssh, backup_file_path):
     try:
         _, stdout, _ = ssh.exec_command(compress_cmd)
         LOG.info('stdout: {0}'.format(stdout.read().decode()))
-        file_list = ssh.listdir()
+        file_list = ssh.listdir(backup_file_path)
     except paramiko.ssh_exception.SSHException as e:
         LOG.error('Connection to host failed with error'
                   '{0}'.format(e))
@@ -98,17 +97,9 @@ def create_remote_path(ssh, path):
     :return:
     """
     create_path_cmd = 'sudo mkdir -p {0}'.format(path)
-    _, stdout, stderr = run_command(create_path_cmd)
-    try:
+    response = run_command(ssh, create_path_cmd)
 
-        # We should get an exit status of 1 if the command failed
-        if stderr.channel.recv_exit_status == 1:
-            LOG.error('stderr is {0}'.format(stderr.read().decode()))
-            return False
-        return path
-    except paramiko.ssh_exception.SSHException as e:
-        LOG.error('Connection to host failed with error'
-                  '{0}'.format(e))
+    return response
 
 
 def get_backup_file(ssh, local_path, remote_path):

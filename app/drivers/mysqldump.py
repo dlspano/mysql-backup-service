@@ -1,4 +1,5 @@
 import logging
+import paramiko
 from datetime import datetime
 
 # Local imports
@@ -34,6 +35,6 @@ class MySQLDump(base.BaseClient):
                                             stderr.read().decode()))
                 return None
             return path
-        except self.paramiko.ssh_exception.SSHException as e:
+        except paramiko.ssh_exception.SSHException as e:
             LOG.error('Connection to host failed with error'
                       '{0}'.format(e))

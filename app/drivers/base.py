@@ -12,6 +12,9 @@ class BaseClient:
     def __init__(self, ssh):
         self.ssh = ssh
 
+    def backup_database(self, database, directory):
+        pass
+
     def compress_db_backup(self, path):
         """
         Compress backup file with remote host's gzip command
@@ -20,6 +23,7 @@ class BaseClient:
         :param path:
         :return:
         """
+
         compress_cmd = 'sudo gzip {0}'.format(path)
         compressed_path = '{0}.gz'.format(path)
         file_list_output = ''

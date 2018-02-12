@@ -1,8 +1,10 @@
 import filecmp
+import paramiko
 import os
 import re
 import unittest
 
+from contextlib import contextmanager
 from unittest import mock
 
 # Local imports
@@ -30,6 +32,13 @@ class TestMySQLDumpBackup(unittest.TestCase):
         self.local_path = os.path.join(os.getcwd(), 'tests', 'local-backups',
                                        'test-backup.sql.gz')
         self.backup_client = mysqldump.MySQLDump(self.ssh)
+
+    @contextmanager
+    def assertNotRaises(self, exc_type):
+        try:
+            yield None
+        except exc_type:
+            raise self.failureException('{} raised'.format(exc_type.__name__))
 
     def test_create_local_path(self):
         self.backup_client.create_local_path(self.local_backup_dir)
@@ -85,6 +94,19 @@ class TestMySQLDumpBackup(unittest.TestCase):
         db_backup = self.backup_client.backup_database('test_database',
                                                        remote_path)
         self.assertIsNone(db_backup)
+
+    def test_backup_db_ssh_exception(self):
+        """
+        Test that ssh exceptions are caught appropriately.
+        """
+
+        self.stdout.channel.recv_exit_status.return_value = 0
+        remote_path = self.backup_client.create_remote_path(
+              self.remote_backup_dir)
+        with self.assertNotRaises(paramiko.SSHException):
+            self.ssh.exec_command.side_effect = paramiko.SSHException
+            self.backup_client.backup_database('test_database',
+                                               remote_path)
 
     def test_get_backup_file(self):
         """

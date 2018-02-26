@@ -1,58 +1,87 @@
 import logging
 import paramiko
-import uuid
+import os
+import shelve
+from uuid import uuid4
 
 # Local imports
-from app.clients import mysqldump
+from app.constants import STATUS, STATUS_FILE_PATH
+from app.drivers import mysqldump
 
 LOG = logging.getLogger(__name__)
-
 
 class Backup:
 
     def __init__(self, **kwargs):
-        self.client = kwargs['client']
-        self.hostname = kwargs['hostname']
-        self.username = kwargs['username']
-        self.database = kwargs['database']
-        self.local_path = kwargs['local_path']
-        self.remote_path = kwargs['remote_path']
+        self.client = kwargs.get('client')
+        self.hostname = kwargs.get('hostname')
+        self.username = kwargs.get('username')
+        self.database = kwargs.get('database')
+        self.local_path = kwargs.get('local_path')
+        self.remote_path = kwargs.get('remote_path')
+        self.task_uuid = kwargs.get('task_uuid')
 
-    def create_connection(self):
+    def connect(self):
         """
         Create a connection to the remote host
 
-        :param hostname:
-        :param username:
-        :return:
+        :param self.hostname:
+        :param self.username:
+        :return: ssh
         """
 
         LOG.info('Trying to connect')
         ssh = paramiko.SSHClient()
         ssh.load_system_host_keys()
         ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        LOG.error('hostname {0}'.format(self.hostname))
         ssh.connect(hostname=self.hostname, username=self.username,
                     timeout=180, look_for_keys=True)
 
         return ssh
 
-    def create_backup(self):
-        ssh = self.create_connection()
+    def create(self):
+        """
+        Create a backup
+        :return:
+        """
+        ssh = self.connect()
         backup_client = None
-        backup_uuid = uuid.uuid4()
 
         if self.client == 'mysqldump':
             backup_client = mysqldump.MySQLDump(ssh)
-
+        LOG.error(backup_client)
+        task_uuid = uuid4()
         backup_client.create_local_path(self.local_path)
         backup_client.create_remote_path(self.remote_path)
-        self.create_status_file(self, backup_uuid)
+
+        self.status(task_uuid, 3)
         backup_file = backup_client.backup_database(self.database,
                                                     self.remote_path)
         compressed_backup = backup_client.compress_db_backup(backup_file)
         if compressed_backup:
-            backup_client.get_backup_file(self.local_path, compressed_backup)
+            backup_client.get_backup_file(self.local_path,
+                                          compressed_backup)
+        self.status(task_uuid, 0)
 
+        return task_uuid, status
 
-#     def create_status_file(self, uuid):
-#        """Create a status file where we can keep track of the job"""
+    def status(self, task_uuid, status=None):
+        """
+        An idempotent method that creates or retrieves a task status from
+        a shelf database file.
+        :param task_uuid:
+        :param status:
+        :return:
+        """
+        path = '/{0}'.format(STATUS_FILE_PATH)
+        if not os.path.exists(path):
+            os.makedirs(path)
+        path = '{0}/status.txt'.format(path)
+
+        with shelve.open(path) as status_file:
+            if status:
+                status_file[task_uuid] = status
+            else:
+                status = status_file[task_uuid]
+            return status, STATUS[status]

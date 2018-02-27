@@ -54,7 +54,6 @@ class Backup:
         backup_client.create_remote_path(self.remote_path)
 
         self.status(self.task_uuid, 3)
-        sleep(30)
         backup_file = backup_client.backup_database(self.database,
                                                     self.remote_path)
         compressed_backup = backup_client.compress_db_backup(backup_file)

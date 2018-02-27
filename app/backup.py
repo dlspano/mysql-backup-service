@@ -2,7 +2,7 @@ import logging
 import paramiko
 import os
 import shelve
-from uuid import uuid4
+from time import sleep
 
 # Local imports
 from app.constants import STATUS, STATUS_FILE_PATH
@@ -34,7 +34,7 @@ class Backup:
         ssh = paramiko.SSHClient()
         ssh.load_system_host_keys()
         ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-        LOG.error('hostname {0}'.format(self.hostname))
+        LOG.info('hostname {0}'.format(self.hostname))
         ssh.connect(hostname=self.hostname, username=self.username,
                     timeout=180, look_for_keys=True)
 
@@ -50,21 +50,18 @@ class Backup:
 
         if self.client == 'mysqldump':
             backup_client = mysqldump.MySQLDump(ssh)
-        LOG.error(backup_client)
-        task_uuid = uuid4()
         backup_client.create_local_path(self.local_path)
         backup_client.create_remote_path(self.remote_path)
 
-        self.status(task_uuid, 3)
+        self.status(self.task_uuid, 3)
+        sleep(30)
         backup_file = backup_client.backup_database(self.database,
                                                     self.remote_path)
         compressed_backup = backup_client.compress_db_backup(backup_file)
         if compressed_backup:
             backup_client.get_backup_file(self.local_path,
                                           compressed_backup)
-        self.status(task_uuid, 0)
-
-        return task_uuid, status
+        self.status(self.task_uuid, 0)
 
     def status(self, task_uuid, status=None):
         """
@@ -74,14 +71,15 @@ class Backup:
         :param status:
         :return:
         """
-        path = '/{0}'.format(STATUS_FILE_PATH)
+        path = '{0}'.format(STATUS_FILE_PATH)
         if not os.path.exists(path):
             os.makedirs(path)
         path = '{0}/status.txt'.format(path)
 
-        with shelve.open(path) as status_file:
-            if status:
-                status_file[task_uuid] = status
-            else:
-                status = status_file[task_uuid]
-            return status, STATUS[status]
+        status_file = shelve.open(path)
+        if status is not None:
+            status_file[task_uuid] = status
+        else:
+            status = status_file[task_uuid]
+        status_file.close()
+        return status, STATUS[status]
